@@ -14,7 +14,7 @@ options(digits = 3)
 ```{r}
 set.seed(123)
 
-tipsData <- read.csv("C:/Users/rohit/Desktop/Analytics Project/Tip-Me-Please/Tip-dataset.csv")
+tipsData <- read.csv("C:/Users/rohit/Desktop/Analytics Project/What-is-my-tip/Tip-dataset.csv")
 
 #Ordering levels of factors for convenience
 tipsData$DayOfTheWeek <- factor(tipsData$DayOfTheWeek, levels = c("Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"),labels = c("Mon","Tue","Wed","Thu","Fri","Sat","Sun"))
