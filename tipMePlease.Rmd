@@ -116,7 +116,7 @@ plot4 <- ggplot(tipsData.train,aes(x=tipsData.train$GenderOfDeliverer,y=tipsData
 plot5 <- ggplot(tipsData.train, aes(x=tipsData.train$OrderAmount,y=tipsData.train$TipPercent)) +
           geom_point()+
           ggtitle("Weak, -ve correlation seem to exist") + 
-          xlab("Order amount") + ylab("")
+          xlab("Order amount") + ylab("Tip%")
 plot6 <- ggplot(tipsData.train, aes(x=tipsData.train$Distance,y=tipsData.train$TipPercent)) +
           geom_point()+
           ggtitle("No visible correlation exists") + 
