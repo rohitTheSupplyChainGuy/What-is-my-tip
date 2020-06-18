@@ -1,0 +1,196 @@
+---
+title: "How much would I tipped ?"
+author: "Rohit Tolawat"
+date: "6/14/2020"
+output: html_document
+---
+
+```{r loadpackages, warning=FALSE, message=FALSE}
+pacman::p_load(caret, data.table, ggplot2, dplyr, Metrics, gridExtra, ggcorrplot,rstatix)
+knitr::opts_chunk$set(echo = FALSE, fig.width=12, fig.height=6, fig.path = 'Figs/')
+options(digits = 3)
+```
+
+```{r}
+set.seed(123)
+
+tipsData <- read.csv("C:/Users/rohit/Desktop/Analytics Project/Tip-Me-Please/Tip-dataset.csv")
+
+#Ordering levels of factors for convenience
+tipsData$DayOfTheWeek <- factor(tipsData$DayOfTheWeek, levels = c("Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"),labels = c("Mon","Tue","Wed","Thu","Fri","Sat","Sun"))
+tipsData$Housing <- factor(tipsData$Housing, levels = c("House", "Apartment", "Hotel", "Business"))
+tipsData$GenderOfTipper <- factor(tipsData$GenderOfTipper, levels = c("Female","Male"))
+tipsData$GenderOfDeliverer <- factor(tipsData$GenderOfDeliverer, levels = c("Female","Male"))
+tipsData$month <- factor(tipsData$month, levels = c("Jul","Aug","Sep","Oct","Nov"))
+tipsData$TipPercent <- (tipsData$TipPercent * 100)
+
+tipsData.dt <- setDT(tipsData)
+```
+
+
+```{r Split the data into training(80%) and test(20%)}
+trainIndex <- sample(1:nrow(tipsData.dt),0.8*nrow(tipsData.dt))
+tipsData.train <- tipsData.dt[trainIndex,]
+tipsData.test <- tipsData.dt[-trainIndex,]
+
+```
+
+```{r checking the variability/distribution of Tip amount}
+box1 <- ggplot(tipsData.train, aes(y=tipsData.train$TipPercent)) +
+  geom_boxplot() +
+  ggtitle("The Tip% does not seem to show much variability, although outliers exist") + 
+  ylab("Tip%")
+grid.arrange(box1,nrow=1)
+hist(tipsData.train$TipPercent, xlab = "Tip percentage", main = "Tip% is concentrated in (0-30)% bracket with few outliers")
+```
+#Insights corner: The Tip% is skewed to the right with few outliers, it makes sense for us to get rid of the outliers before we further our analysis.
+
+```{r Identifying the outliers and removing them from the dataset}
+
+#A tip of more than 40% is assumed to be an outlier (40% is derived after looking at the distribution above)
+
+outlier.index <- c()
+
+for(i in 1:nrow(tipsData.train)){
+  tipsRow <- tipsData.train[i,]
+  if (tipsRow$TipPercent >= 40){
+    outlier.index <- append(outlier.index, i)
+  }
+}
+
+if(length(outlier.index) > 0){
+tipsData.train <- tipsData.train[-outlier.index,]
+}
+
+paste(length(outlier.index), "outliers have been identified and removed from the dataset")
+```
+
+```{r distribution of the data after outliers have been removed}
+box1 <- ggplot(tipsData.train, aes(y=tipsData.train$TipPercent)) +
+          geom_boxplot() +
+          ggtitle("Variability of the Tip% after outliers have been removed") +
+          xlab("") + ylab("Tip%")
+      
+grid.arrange(box1,nrow=1)
+
+hist1 <- ggplot(tipsData.train, aes(y=tipsData.train$OrderAmount)) +
+  geom_boxplot()
+hist(tipsData.train$TipPercent, xlab = "Tip%", main = "After removing outliers from dataset, distribution seems normal")
+```
+#Insights corner: The distribution of the TipPercent after outliers have been removed seems to be normally oriented. It must also be noted that more than 50% of the tips lies between (10-20)%
+
+```{r checking the variability/distribution of Tip percent}
+
+mean(tipsData.train$TipPercent)
+median(tipsData.train$TipPercent)
+```
+#Insights corner: The measures of central tendency, mean and median indicate the tip to be somewhere around (15-16)%. An interesting fact to note is that mean is slightly greater than median indicating the fact that the data is slightly skewed to the right.
+
+
+```{r Baseline model}
+baseModel1 <- RMSE(mean(tipsData.train$Tip), tipsData.train$TipPercent)
+baseModel2 <- RMSE(median(tipsData.train$Tip), tipsData.train$TipPercent)
+paste("RMSE with mean of the tip - ",round(baseModel1,2))
+paste("RMSE with median of the tip - ",round(baseModel2,2))
+```
+
+```{r Checking the variation of variables against the response variable}
+
+
+plot1 <- ggplot(tipsData.train, aes(x=tipsData.train$DayOfTheWeek,y=tipsData.train$TipPercent))+
+          geom_boxplot() +
+          ggtitle("Tip% doesn't seem to vary day-wise") + 
+          xlab("Day of the week") + ylab("Tip%")
+plot2 <- ggplot(tipsData.train, aes(x=tipsData.train$month,y=tipsData.train$TipPercent)) +
+          geom_boxplot()+
+          ggtitle("Tip% Variability across months") + 
+          xlab("Month") + ylab("")
+plot3 <- ggplot(tipsData.train, aes(x=tipsData.train$GenderOfTipper,y=tipsData.train$TipPercent)) +
+          geom_boxplot()+
+          ggtitle("Male/Female - we tip the same") + 
+          xlab("Gender of the tipper") + ylab("Tip%")
+plot4 <- ggplot(tipsData.train,aes(x=tipsData.train$GenderOfDeliverer,y=tipsData.train$TipPercent)) + 
+          geom_boxplot()+
+          ggtitle("Male/Female - we receive the same") + 
+          xlab("Gender of the deliverer") + ylab("Tip%")
+plot5 <- ggplot(tipsData.train, aes(x=tipsData.train$OrderAmount,y=tipsData.train$TipPercent)) +
+          geom_point()+
+          ggtitle("Weak, -ve correlation seem to exist") + 
+          xlab("Order amount") + ylab("")
+plot6 <- ggplot(tipsData.train, aes(x=tipsData.train$Distance,y=tipsData.train$TipPercent)) +
+          geom_point()+
+          ggtitle("No visible correlation exists") + 
+          xlab("Distance travelled for delivery") + ylab("")
+plot7 <- ggplot(tipsData.train, aes(x=tipsData.train$Housing,y=tipsData.train$TipPercent)) +
+          geom_boxplot()+
+          ggtitle("Tip% across destinations does vary a bit, but is it significant ?") + 
+          xlab("Delivery destinations") + ylab("Tip%")
+
+grid.arrange(plot5,plot6,nrow = 1)
+grid.arrange(plot1,plot2,nrow = 1)
+grid.arrange(plot3,plot4,nrow = 1)
+grid.arrange(plot7, nrow = 1)
+```
+
+```{r generating the correlation matrix for continuous predictors and response variables}
+tipsData.train.cor <-  tipsData.train[,c(6,9,10)]
+tipsData.ggcorr <- round(cor(tipsData.train.cor),2)
+ggcorrplot(tipsData.ggcorr,lab = TRUE)
+```
+#Insights corner: Distance does not seem to have any correlation with Tip %. One might assume that as order amount increases, the tip percent would go down resulting in lower aboslute tips to the deliverer, but this does not seem to be the case. With a weak correlation coefficient of -0.23, Tip % does not seem to vary with order amount as well.
+
+```{r}
+
+#Null hypothesis: All the levels of a factor in the analysis have the same average Tip %
+#Alternate hypotheis: All the levels of a factor in the analysis do not have the same average Tip %
+anova1 <- tipsData.train %>% anova_test(TipPercent ~ Housing)
+anova2 <- tipsData.train %>% anova_test(TipPercent ~ month)
+anova3 <- tipsData.train %>% anova_test(TipPercent ~ GenderOfDeliverer)
+anova4 <- tipsData.train %>% anova_test(TipPercent ~ GenderOfTipper)
+anova5 <- tipsData.train %>% anova_test(TipPercent ~ DayOfTheWeek)
+
+get_anova_table(anova1)
+get_anova_table(anova2)
+get_anova_table(anova3)
+get_anova_table(anova4)
+get_anova_table(anova5)
+
+#The critical F-statistic for each factor is more than the F-statistic obtained from the experiment, leading for us to not reject the null hypothesis i.e. the average Tip % does not vary across the levels of a given factor.
+```
+
+#Insights corner: The predictors in the experiment have not shown a significant amount of impact on the response, building a model out of these predictors with given data seems futile. In this case, it is safe to assume that an average of ~(15-16)% is what a deliverer can expect regardless of the locality, day, month, gender(deliverer or orderer) or the order amount.
+
+```{r Running the model on test data}
+paste("RMSE when running the model 1 (mean) on the test data - ",round(RMSE(baseModel1,tipsData.test$TipPercent),2))
+paste("RMSE when running the model 1 (mean) on the test data - ",round(RMSE(baseModel2,tipsData.test$TipPercent),2))
+```
+#Insights corner: The baseline models were run on the test data and results reveal that the model 1 is minutely better than model 2
+
+#Lesson learnt: Don't be hasty in building a model with the data available. If there seems to be very little or no correlation between the predictor and response variables, you might be better off with a baseline model or no model at all.
+```{r creating pivot tables as needed}
+bar1 <- ggplot(tipsData.train,aes(x=tipsData.train$DayOfTheWeek)) +
+          geom_bar(fill = "black") +
+          xlab("Day of the week") + ylab("# of records")
+
+bar2 <- ggplot(tipsData.train,aes(x=tipsData.train$month)) +
+          geom_bar(fill = "black") +
+          xlab("Month") + ylab("# of records")
+
+bar3 <- ggplot(tipsData.train,aes(x=tipsData.train$GenderOfDeliverer)) +
+          geom_bar(fill = "black") +
+          xlab("Gender of the deliverer") + ylab("# of records")
+
+bar4 <- ggplot(tipsData.train,aes(x=tipsData.train$GenderOfTipper)) +
+          geom_bar(fill = "black") +
+          xlab("Gender of the tipper") + ylab("# of records")
+
+bar5 <- ggplot(tipsData.train,aes(x=tipsData.train$Housing)) +
+          geom_bar(fill = "black") +
+          xlab("Delivery destinations") + ylab("# of records")
+grid.arrange(bar1,bar2,nrow=1)
+grid.arrange(bar4,bar5,bar3,nrow=2)
+
+```
+#A thought to ponder on: Would the things be different had we had uniformly distributed data across factors and levels ?
+
+
